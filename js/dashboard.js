@@ -2,7 +2,6 @@ const SUPABASE_URL= "https://ghpfayqfnzliltgnpwim.supabase.co";
 const SUPABASE_KEY= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdocGZheXFmbnpsaWx0Z25wd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1MDUwNDksImV4cCI6MjA3MDA4MTA0OX0.PHIbsdufPmece1QeqI9KhRziM8-FXeAhLrEXXNagTPM";
                                                                                                                                                                                                                              const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-
 async function agregarEstudiante() {
   const nombre = document.getElementById("nombre").value;
   const correo = document.getElementById("correo").value;
@@ -35,25 +34,116 @@ async function agregarEstudiante() {
 
 async function cargarEstudiantes() {
   const { data, error } = await client
-    .from("estudiantes")  //Nombre de BD
+    .from("estudiantes")
     .select("*")
     .order("created_at", { ascending: false });
+
+  const lista = document.getElementById("lista-estudiantes");
+  lista.innerHTML = "";
 
   if (error) {
     alert("Error al cargar estudiantes: " + error.message);
     return;
   }
 
-  const lista = document.getElementById("lista-estudiantes");
-  lista.innerHTML = "";
   data.forEach((est) => {
     const item = document.createElement("li");
-    item.textContent = `${est.nombre} (${est.clase})`;
+    item.innerHTML = `
+      ${est.nombre} (${est.clase})
+      <button onclick="actualizarEstudiante('${est.id}')">Update</button>
+      <button onclick="borrarEstudiante('${est.id}')">Delete</button>
+    `;
     lista.appendChild(item);
   });
 }
 
-cargarEstudiantes();
+// 🔹 Función para borrar
+async function borrarEstudiante(id) {
+  const result = await Swal.fire({
+    title: '¿Estás seguro?',
+    text: "No podrás revertir esta acción",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Sí, borrar',
+    cancelButtonText: 'Cancelar'
+  });
+
+  if (result.isConfirmed) {
+    const { error } = await client
+      .from("estudiantes")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      Swal.fire('Error', error.message, 'error');
+    } else {
+      Swal.fire('Borrado', 'El estudiante ha sido borrado.', 'success');
+      cargarEstudiantes();
+    }
+  }
+}
+
+
+// 🔹 Función para actualizar
+async function actualizarEstudiante(id) {
+  // Obtener datos actuales
+  const { data, error } = await client
+    .from("estudiantes")
+    .select("nombre, correo, clase")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    Swal.fire('Error', 'No se pudo obtener los datos', 'error');
+    return;
+  }
+
+  const { value: formValues } = await Swal.fire({
+    title: 'Actualizar estudiante',
+    html:
+      `<label>Nombre:</label>` +
+      `<input id="swal-input1" class="swal2-input" placeholder="Nombre" value="${data.nombre}">` +
+      `<label>Correo:</label>` +
+      `<input id="swal-input2" class="swal2-input" placeholder="Correo" value="${data.correo}">` +
+      `<label>Clase:</label>` +
+      `<input id="swal-input3" class="swal2-input" placeholder="Clase" value="${data.clase}">`,
+    focusConfirm: false,
+    showCancelButton: true,
+    preConfirm: () => {
+      const nombre = document.getElementById('swal-input1').value.trim();
+      const correo = document.getElementById('swal-input2').value.trim();
+      const clase = document.getElementById('swal-input3').value.trim();
+
+      if (!nombre || !correo || !clase) {
+        Swal.showValidationMessage('Todos los campos son obligatorios');
+        return false;
+      }
+      return { nombre, correo, clase };
+    }
+  });
+
+  if (formValues) {
+    const { error: updateError } = await client
+      .from("estudiantes")
+      .update({
+        nombre: formValues.nombre,
+        correo: formValues.correo,
+        clase: formValues.clase
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      Swal.fire('Error', updateError.message, 'error');
+    } else {
+      Swal.fire('¡Listo!', 'Estudiante actualizado', 'success');
+      cargarEstudiantes();
+    }
+  }
+}
+
+
 
 async function subirArchivo() {
   const archivoInput = document.getElementById("archivo");
@@ -74,19 +164,21 @@ async function subirArchivo() {
     return;
   }
 
-  const nombreRuta = `${user.id}/${archivo.name}`; 
-  const { data, error } = await client.storage
-    .from("tareas") //Nombre del bucket
+  const safeName = archivo.name.replace(/\s+/g, "_"); // Quitar espacios
+  const nombreRuta = `${user.id}/${Date.now()}_${safeName}`; // Nombre único
+
+  const { error } = await client.storage
+    .from("tareas")
     .upload(nombreRuta, archivo, {
       cacheControl: "3600",
-      upsert: false,
+      upsert: true, // permite sobrescribir si hay nombre igual
     });
 
   if (error) {
     alert("Error al subir: " + error.message);
   } else {
     alert("Archivo subido correctamente.");
-    listarArchivos(); 
+    listarArchivos();
   }
 }
 
@@ -103,7 +195,7 @@ async function listarArchivos() {
 
   const { data, error } = await client.storage
     .from("tareas")
-    .list(`${user.id}`, { limit: 20 });
+    .list(`${user.id}`, { limit: 50 });
 
   const lista = document.getElementById("lista-archivos");
   lista.innerHTML = "";
@@ -113,21 +205,21 @@ async function listarArchivos() {
     return;
   }
 
-  data.forEach(async (archivo) => {
+  for (const archivo of data) {
     const { data: signedUrlData, error: signedUrlError } = await client.storage
       .from("tareas")
-      .createSignedUrl(`${user.id}/${archivo.name}`, 60); 
+      .createSignedUrl(`${user.id}/${archivo.name}`, 60);
+ // 1 hora
 
     if (signedUrlError) {
       console.error("Error al generar URL firmada:", signedUrlError.message);
-      return;
+      continue;
     }
 
     const publicUrl = signedUrlData.signedUrl;
-
     const item = document.createElement("li");
 
-    const esImagen = archivo.name.match(/\.(jpg|jpeg|png|gif)$/i);
+    const esImagen = archivo.name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
     const esPDF = archivo.name.match(/\.pdf$/i);
 
     if (esImagen) {
@@ -143,13 +235,15 @@ async function listarArchivos() {
         <a href="${publicUrl}" target="_blank">Ver PDF</a>
       `;
     } else {
-      item.innerHTML = `<a href="${publicUrl}" target="_blank">${archivo.name}</a>`;
+      item.innerHTML = `
+        <strong>${archivo.name}</strong><br>
+        <a href="${publicUrl}" target="_blank">${archivo.name}</a>
+      `;
     }
 
     lista.appendChild(item);
-  });
+  }
 }
-listarArchivos();
 
 async function cerrarSesion() {
   const { error } = await client.auth.signOut();
@@ -162,3 +256,7 @@ async function cerrarSesion() {
     window.location.href = "index.html";
   }
 }
+
+// Inicializar cuando cargue la página
+cargarEstudiantes();
+listarArchivos();
