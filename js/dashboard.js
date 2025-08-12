@@ -1,5 +1,7 @@
 const SUPABASE_URL= "https://ghpfayqfnzliltgnpwim.supabase.co";
 const SUPABASE_KEY= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdocGZheXFmbnpsaWx0Z25wd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1MDUwNDksImV4cCI6MjA3MDA4MTA0OX0.PHIbsdufPmece1QeqI9KhRziM8-FXeAhLrEXXNagTPM";
+                                                                                                                                                                                                                             const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 
 async function agregarEstudiante() {
   const nombre = document.getElementById("nombre").value;
@@ -48,21 +50,6 @@ async function cargarEstudiantes() {
     const item = document.createElement("li");
     item.textContent = `${est.nombre} (${est.clase})`;
     lista.appendChild(item);
-
-    // ======== LÍNEAS AÑADIDAS (no se modificó nada existente) ========
-    const btnEdit = document.createElement("button");
-    btnEdit.textContent = "Actualizar";
-    btnEdit.style.marginLeft = "8px";
-    btnEdit.onclick = () => actualizarEstudiante(est.id, est.nombre, est.correo, est.clase);
-
-    const btnDel = document.createElement("button");
-    btnDel.textContent = "Eliminar";
-    btnDel.style.marginLeft = "6px";
-    btnDel.onclick = () => eliminarEstudiante(est.id);
-
-    item.appendChild(btnEdit);
-    item.appendChild(btnDel);
-    // =================================================================
   });
 }
 
@@ -175,44 +162,3 @@ async function cerrarSesion() {
     window.location.href = "index.html";
   }
 }
-
-// ======== LÍNEAS AÑADIDAS: funciones para Actualizar y Eliminar ========
-async function actualizarEstudiante(id, nombreActual = "", correoActual = "", claseActual = "") {
-  const nombre = prompt("Nombre:", nombreActual);
-  if (nombre === null) return; // cancelado
-
-  const correo = prompt("Correo:", correoActual);
-  if (correo === null) return;
-
-  const clase = prompt("Clase:", claseActual);
-  if (clase === null) return;
-
-  const { error } = await client
-    .from("estudiantes")
-    .update({ nombre, correo, clase })
-    .eq("id", id);
-
-  if (error) {
-    alert("Error al actualizar: " + error.message);
-  } else {
-    alert("Estudiante actualizado");
-    cargarEstudiantes();
-  }
-}
-
-async function eliminarEstudiante(id) {
-  if (!confirm("¿Eliminar este estudiante?")) return;
-
-  const { error } = await client
-    .from("estudiantes")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    alert("Error al eliminar: " + error.message);
-  } else {
-    alert("Estudiante eliminado");
-    cargarEstudiantes();
-  }
-}
-// =======================================================================
